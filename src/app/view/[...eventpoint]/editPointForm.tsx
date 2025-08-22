@@ -35,18 +35,6 @@ type Event_SeqPoints_Slideshow = ({
 
 type DelSlide = Pick<points_slideshow, 'pointid' | 'image'>;
 
-/*
-interface HTMLInputElementFake extends Pick<HTMLInputElement, 'id' | 'name' | 'value' | 'files'> {
-    addEventListener: (type: "click" | "change" | "input", listener: (evt: Event) => void | EventListenerObject, options?: boolean | AddEventListenerOptions) => void;
-    id: string;
-    name: string;
-    value: string;
-    files: FileList | null;
-    click: () => void;
-    current: HTMLInputElement | null;
-}
-*/
-
 function getLastFiveCharsWithoutExtension(filename: string): string {
     // Find the index of the last dot
     const lastDotIndex = filename.lastIndexOf('.');
@@ -58,13 +46,10 @@ function getLastFiveCharsWithoutExtension(filename: string): string {
     return newName.slice(-5);
 }
 
-
-
 interface Props {
     evntSeqPntSlides: Prettify<Event_SeqPoints_Slideshow>,
     updateAction: (_formData: FormData) => void
 }
-
 
 export const EditPointForm = (
     {
@@ -73,22 +58,16 @@ export const EditPointForm = (
     }: Props
 ) => {
 
-
-
-
     const [deletedImages, setDeletedImages] = useState<string[]>([]);
+    const [slides, setSlides] = useState<points_slideshow[]>(evntSeqPntSlides.slideshow);
+    const [captions, setCaptions] = useState<string[]>(evntSeqPntSlides.slideshow.map(slide => slide.caption || ''));
 
-
+    const deletedImagesRef = useRef<string[]>([]);
     const slidesInputRef = useRef<HTMLInputElement[]>([]);
     const slidesInputArr = useRef<File[]>([]);
     const slidesImageRef = useRef<HTMLImageElement[]>([]);
 
-    const [slides, setSlides] = useState<points_slideshow[]>(evntSeqPntSlides.slideshow);
-
-    const deletedImagesRef = useRef<string[]>([]);
-
     //================= slides display ====================
-
     const passOnClick = (ref: React.RefObject<HTMLInputElement>) => {
         const input = ref.current;
         if (input) {
@@ -178,17 +157,19 @@ export const EditPointForm = (
                         width={200}
                         height={150}
                         onClick={() => {
-                            // if (slidesInputRef && slidesInputRef!.current && Array.isArray(slidesInputRef!.current) && slidesInputRef!.current[imageorder]) {
-                            passOnClick(slidesInputRef.current[imageorder] as unknown as React.RefObject<HTMLInputElement>);
-                            // }
-                        }} //`slideInput_${_key}`
+                            slidesInputRef.current[imageorder]?.click();
+                        }}
                     />
                     <div className="block ml-2" key={`div-${_key}`}>
-                        <Caption text={caption ?? ''} />
+                        <Caption text={caption ?? ''} imageorder={imageorder} />
                         <button type="button" onClick={() => confirm('Are you sure you want to delete this slide?') ? removeSlide({ pointid: pointid, image: image }) : null} className="align-text-bottom bg-amber-300 text-red-700 p-2 rounded hover:bg-amber-600 transition duration-200 mb-1">
                             Remove X
                         </button>
-                        <SlideFileInput keyName={_key} imageorder={imageorder} />
+                        <SlideFileInput
+                            keyName={_key}
+                            imageorder={imageorder}
+                        // matchingSlide={slidesImageRef.current[imageorder]}
+                        />
                     </div>
                 </li>
         );
@@ -196,7 +177,8 @@ export const EditPointForm = (
     }
 
     // const SlideFileInput = memo(({ keyName, index }: { keyName: string; index: number }) => {
-    const SlideFileInput = ({ keyName, imageorder }: { keyName: string; imageorder: number }) => {
+    // const SlideFileInput = ({ keyName, imageorder, matchingSlide }: { keyName: string; imageorder: number; matchingSlide: HTMLImageElement | undefined }) => {
+    const SlideFileInput = ({ keyName, imageorder }: { keyName: string; imageorder: number; }) => {
         // console.log(`Rendering SlideFileInput for keyName: ${keyName}, index: ${index}`);
         return (
             <input
@@ -213,6 +195,8 @@ export const EditPointForm = (
                     (e) => {
                         console.log(`File input changed for slide ${imageorder}:`, e.target.files);
                         handleFilePickSlides(e, imageorder);
+                        // const newFileURL = URL.createObjectURL(e.target.files?.[0] || new Blob());
+                        // matchingSlide!.src = newFileURL;
                     }
                 }
                 accept="image/png, image/jpeg, image/gif"
@@ -225,13 +209,18 @@ export const EditPointForm = (
     //     return prevProps.keyName === nextProps.keyName && prevProps.index === nextProps.index;
     // });
 
-    const Caption = ({ text }: { text: string }) => {
+    const Caption = ({ text, imageorder }: { text: string; imageorder: number }) => {
         // const Caption = memo(({ text }: { text: string }) => {
         console.log(`Rendering Caption for text: ${text}`);
         return (
             <textarea cols={50}
                 name='captions[]'
                 defaultValue={text}
+                onChange={(e) => {
+                    const newCaptions = [...captions];
+                    newCaptions[imageorder] = e.target.value;
+                    setCaptions(newCaptions);
+                }}
                 className="block mb-2" />
         );
     }
@@ -253,12 +242,14 @@ export const EditPointForm = (
                     {pntSlides.map((slide, index) => {
                         const endOfImageName = getLastFiveCharsWithoutExtension(slide.image);
                         const _key = `${slide.pointid}_${slide.imageorder}_${endOfImageName}_${slide.caption?.substring(0, 6)}`;
+                        const caption = captions[slide.imageorder] || '';
                         return (
                             <SlideItem
                                 key={_key}
                                 pointid={slide.pointid}
                                 image={slide.image}
-                                caption={slide.caption}
+                                // caption={slide.caption}
+                                caption={caption}
                                 imageorder={slide.imageorder}
                                 index={index}
                             // key={`slide-${index}`}
