@@ -12,11 +12,6 @@ const NotChosen = () => {
 
     );
 };
-const updateAction = async (_formData: FormData) => {
-    "use server";
-    // Handle form submission
-    return Promise.resolve();
-};
 
 const EditPage = async ({
     params,
@@ -79,7 +74,7 @@ const EditPage = async ({
 
         return (
             <Suspense fallback={<div>Loading Edit Information...</div>}>
-                <EditPointForm evntSeqPntSlides={slideshowJSON} updateAction={updateAction} />
+                <EditPointForm evntSeqPntSlides={slideshowJSON} />
             </Suspense>
         )
     }

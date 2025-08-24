@@ -4,8 +4,8 @@
 import Form from 'next/form';
 import Image from "next/image";
 import { type Prettify } from "node_modules/zod/v4/core/util";
-import { type ChangeEvent, useRef, useState } from "react";
-// import { memo } from "react";
+import React, { type ChangeEvent, startTransition, useActionState, useRef, useState } from "react";
+import { updateAction } from './serverAction';
 
 function removeDot(path: string): string {
     if (path.startsWith('./')) {
@@ -46,21 +46,47 @@ function getLastFiveCharsWithoutExtension(filename: string): string {
     return newName.slice(-5);
 }
 
+const initialState = { message: '', title: '' };
+
 interface Props {
     evntSeqPntSlides: Prettify<Event_SeqPoints_Slideshow>,
-    updateAction: (_formData: FormData) => void
 }
 
 export const EditPointForm = (
     {
-        evntSeqPntSlides,
-        updateAction
+        evntSeqPntSlides
     }: Props
 ) => {
 
+    // const handleSubmit = (initialState: any, formData: FormData) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        if (Array.isArray(slidesInputArr.current) && slidesInputArr.current.length > 0) {
+            slidesInputArr.current.forEach((file, index) => {
+                console.log(`Adding slide file ${index}:`, file);
+                formData.append(`slideFile[]`, file);
+            });
+            formData.set('eventid', evntSeqPntSlides?.eventid.toString());
+            formData.set('pointid', evntSeqPntSlides?.pointid.toString());
+            formData.set('deletedImages[]', JSON.stringify(deletedImages));
+            formData.set('slides', JSON.stringify(slides));
+        }
+        startTransition(() => {
+            // updateAction(initialState, formData);
+            submitAction(formData);
+        });
+    };
+
+
+    const [state, submitAction] = useActionState(
+        updateAction,
+        initialState,
+    );
+
     const [deletedImages, setDeletedImages] = useState<string[]>([]);
     const [slides, setSlides] = useState<points_slideshow[]>(evntSeqPntSlides.slideshow);
-    const [captions, setCaptions] = useState<string[]>(evntSeqPntSlides.slideshow.map(slide => slide.caption || ''));
+    const [captions, setCaptions] = useState<string[]>(evntSeqPntSlides.slideshow.map(slide => slide.caption ?? ''));
 
     const deletedImagesRef = useRef<string[]>([]);
     const slidesInputRef = useRef<HTMLInputElement[]>([]);
@@ -68,12 +94,12 @@ export const EditPointForm = (
     const slidesImageRef = useRef<HTMLImageElement[]>([]);
 
     //================= slides display ====================
-    const passOnClick = (ref: React.RefObject<HTMLInputElement>) => {
-        const input = ref.current;
-        if (input) {
-            input.click();
-        }
-    };
+    // const passOnClick = (ref: React.RefObject<HTMLInputElement>) => {
+    //     const input = ref.current;
+    //     if (input) {
+    //         input.click();
+    //     }
+    // };
 
     const removeSlide = (delSlide: Pick<points_slideshow, 'pointid' | 'image'>) => {
         const delslide: DelSlide = {
@@ -157,7 +183,10 @@ export const EditPointForm = (
                         width={200}
                         height={150}
                         onClick={() => {
-                            slidesInputRef.current[imageorder]?.click();
+                            const ref = slidesInputRef.current[imageorder];
+                            if (ref) {
+                                ref.click();
+                            }
                         }}
                     />
                     <div className="block ml-2" key={`div-${_key}`}>
@@ -168,7 +197,7 @@ export const EditPointForm = (
                         <SlideFileInput
                             keyName={_key}
                             imageorder={imageorder}
-                        // matchingSlide={slidesImageRef.current[imageorder]}
+                            matchingSlide={slidesImageRef.current[imageorder]}
                         />
                     </div>
                 </li>
@@ -176,9 +205,7 @@ export const EditPointForm = (
 
     }
 
-    // const SlideFileInput = memo(({ keyName, index }: { keyName: string; index: number }) => {
-    // const SlideFileInput = ({ keyName, imageorder, matchingSlide }: { keyName: string; imageorder: number; matchingSlide: HTMLImageElement | undefined }) => {
-    const SlideFileInput = ({ keyName, imageorder }: { keyName: string; imageorder: number; }) => {
+    const SlideFileInput = ({ keyName, imageorder, matchingSlide }: { keyName: string; imageorder: number; matchingSlide?: HTMLImageElement }) => {
         // console.log(`Rendering SlideFileInput for keyName: ${keyName}, index: ${index}`);
         return (
             <input
@@ -191,12 +218,16 @@ export const EditPointForm = (
                         slidesInputRef.current[imageorder] = el;
                     }
                 }}
+                value={''} // to allow re-selecting the same file
                 onChange={
                     (e) => {
-                        console.log(`File input changed for slide ${imageorder}:`, e.target.files);
+                        console.log(`onChange File input changed for slide ${imageorder}:`, e.target.files);
+                        console.log(`matchingSlide:`, matchingSlide);
                         handleFilePickSlides(e, imageorder);
-                        // const newFileURL = URL.createObjectURL(e.target.files?.[0] || new Blob());
-                        // matchingSlide!.src = newFileURL;
+                        const newFileURL = URL.createObjectURL(e.target.files?.[0] || new Blob());
+                        if (matchingSlide) {
+                            matchingSlide.src = newFileURL;
+                        }
                     }
                 }
                 accept="image/png, image/jpeg, image/gif"
@@ -204,30 +235,40 @@ export const EditPointForm = (
             />
         );
     };
-    // }, (prevProps, nextProps) => {
-    //     // Only re-render if keyName or index has changed
-    //     return prevProps.keyName === nextProps.keyName && prevProps.index === nextProps.index;
-    // });
 
     const Caption = ({ text, imageorder }: { text: string; imageorder: number }) => {
-        // const Caption = memo(({ text }: { text: string }) => {
         console.log(`Rendering Caption for text: ${text}`);
         return (
             <textarea cols={50}
                 name='captions[]'
                 defaultValue={text}
-                onChange={(e) => {
+                // if I use onChange to make a managed component then focus is lost after every character typed
+                // if I leave it uncontrolled every time the component re-renders, whenever a file is edited
+                // then the comment returns to the default value
+                // so I have to use a ref to store the current value
+                ref={el => {
+                    if (el) {
+                        el.value = captions[imageorder] ?? '';
+                    }
+                }}
+                onBlur={(e) => {
                     const newCaptions = [...captions];
                     newCaptions[imageorder] = e.target.value;
                     setCaptions(newCaptions);
                 }}
+                placeholder="Enter caption for this slide"
+                // This doesn't work as I want because the component re-renders every time a file is changed
+                // and the caption returns to the defaultValue
+                // value={captions[imageorder] ?? text}
+                // onChange={(e) => {
+                //     const newCaptions = [...captions];
+                //     newCaptions[imageorder] = e.target.value;
+                //     setCaptions(newCaptions);
+                //     e.currentTarget.focus();
+                // }}
                 className="block mb-2" />
         );
     }
-    // }, (prevProps, nextProps) => {
-    //     // Only re-render if text has changed
-    //     return prevProps.text === nextProps.text;
-    // });
 
 
     //================= end slides display ================
@@ -242,7 +283,7 @@ export const EditPointForm = (
                     {pntSlides.map((slide, index) => {
                         const endOfImageName = getLastFiveCharsWithoutExtension(slide.image);
                         const _key = `${slide.pointid}_${slide.imageorder}_${endOfImageName}_${slide.caption?.substring(0, 6)}`;
-                        const caption = captions[slide.imageorder] || '';
+                        const caption = captions[slide.imageorder] ?? slide.caption ?? '';
                         return (
                             <SlideItem
                                 key={_key}
@@ -252,7 +293,6 @@ export const EditPointForm = (
                                 caption={caption}
                                 imageorder={slide.imageorder}
                                 index={index}
-                            // key={`slide-${index}`}
                             />
                         );
                     })}
@@ -262,27 +302,10 @@ export const EditPointForm = (
         return content;
     };
 
-    const handleSubmit = (formData: FormData) => {
-        if (Array.isArray(slidesInputArr.current) && slidesInputArr.current.length > 0) {
-            slidesInputArr.current.forEach((file, index) => {
-                console.log(`Adding slide file ${index}:`, file);
-                formData.append(`slideFile[]`, file);
-            });
-            formData.set('eventid', evntSeqPntSlides?.eventid.toString());
-            formData.set('pointid', evntSeqPntSlides?.pointid.toString());
-            formData.set('deletedImages[]', JSON.stringify(deletedImages));
-            formData.set('slides', JSON.stringify(slides));
-
-            // const blob = new Blob(slidesInputArr.current, { type: 'image/jpeg' });
-            // formData.append('slidesRefArr', blob);
-        }
-        updateAction(formData);
-    };
 
 
     return (
-        // <Form action={updateAction} id="editPointForm">
-        <Form action={handleSubmit} id='editpPointForm'>
+        <Form onSubmit={handleSubmit} id='editpPointForm' action={''}>
             <div className="space-y-12">
                 <div className="border-b border-gray-900/10 pb-12">
                     <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
@@ -304,6 +327,19 @@ export const EditPointForm = (
                 <button type="button" className="text-sm/6 font-semibold text-gray-900">Cancel</button>
                 <button type="submit" className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Save</button>
             </div>
+            {/* Display the echoed form data */}
+            {state.message ? (
+                <div aria-live="polite" style={{ marginTop: '1rem' }}>
+                    <h2 className="text-lg font-bold">{state.title}</h2>
+                    <div dangerouslySetInnerHTML={{ __html: state.message }} />
+                </div>
+            ) : null}
+            {state.prevState ? (
+                <div aria-live="polite" style={{ marginTop: '1rem' }}>
+                    <h2 className="text-lg font-bold">Previous State</h2>
+                    <div dangerouslySetInnerHTML={{ __html: state.prevState.message }} />
+                </div>
+            ) : null}
         </Form>
     )
 };
