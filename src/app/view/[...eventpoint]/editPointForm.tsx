@@ -334,12 +334,6 @@ export const EditPointForm = (
                     <div dangerouslySetInnerHTML={{ __html: state.message }} />
                 </div>
             ) : null}
-            {state.prevState ? (
-                <div aria-live="polite" style={{ marginTop: '1rem' }}>
-                    <h2 className="text-lg font-bold">Previous State</h2>
-                    <div dangerouslySetInnerHTML={{ __html: state.prevState.message }} />
-                </div>
-            ) : null}
         </Form>
     )
 };
