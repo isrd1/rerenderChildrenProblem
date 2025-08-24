@@ -67,11 +67,18 @@ export const EditPointForm = (
                 console.log(`Adding slide file ${index}:`, file);
                 formData.append(`slideFile[]`, file);
             });
-            formData.set('eventid', evntSeqPntSlides?.eventid.toString());
-            formData.set('pointid', evntSeqPntSlides?.pointid.toString());
-            formData.set('deletedImages[]', JSON.stringify(deletedImages));
-            formData.set('slides', JSON.stringify(slides));
         }
+        if (Array.isArray(slidesInputArr.current) && slidesInputArr.current.length > 0) {
+            slidesInputArr.current.forEach((file, index) => {
+                console.log(`Adding slide file ${index}:`, file);
+                formData.append(`slideFile[]`, file);
+            });
+        }
+        formData.set('eventid', evntSeqPntSlides?.eventid.toString());
+        formData.set('pointid', evntSeqPntSlides?.pointid.toString());
+        formData.set('deletedImages[]', JSON.stringify(deletedImages));
+        formData.set('slides', JSON.stringify(slides));
+
         startTransition(() => {
             // updateAction(initialState, formData);
             submitAction(formData);
@@ -94,12 +101,6 @@ export const EditPointForm = (
     const slidesImageRef = useRef<HTMLImageElement[]>([]);
 
     //================= slides display ====================
-    // const passOnClick = (ref: React.RefObject<HTMLInputElement>) => {
-    //     const input = ref.current;
-    //     if (input) {
-    //         input.click();
-    //     }
-    // };
 
     const removeSlide = (delSlide: Pick<points_slideshow, 'pointid' | 'image'>) => {
         const delslide: DelSlide = {
@@ -130,6 +131,9 @@ export const EditPointForm = (
                     ]);
                     deletedImagesRef.current.push(previousFileName);
                     slidesInputArr.current[imageorder] = file;
+                    if (slidesImageRef.current[imageorder]) {
+                        slidesImageRef.current[imageorder].src = URL.createObjectURL(file);
+                    }
 
                     // update image name, leave the other properties unchanged and but don't mutate the slides array
                     setSlides(slides.map((slide) => {
@@ -152,13 +156,13 @@ export const EditPointForm = (
         const _key = `${pointid}_${imageorder}_${endOfImageName}`;
         let imageUrl = removeDot(image);
         if (!imageUrl.includes('/')) { // no path so just filename
-            // convert to url which Image can display by getting the actual file from the matching input element below
+            // no path to file so create url from input to display in Image
             const inputEl: HTMLInputElement = document.querySelector(`#slideInput_${_key}`)!; // as HTMLInputElement;
             const blob = new Blob(slidesInputArr.current[imageorder] ? [slidesInputArr.current[imageorder]] : [], { type: 'image/jpeg' });
             imageUrl = inputEl?.files?.[0] ? URL.createObjectURL(inputEl.files[0]) : URL.createObjectURL(blob);
         }
 
-        // const fileName = slidesInputRef.current[index]?.files?.[0]?.name || 'ohno';
+        // const fileName = slidesInputRef.current[index]?.files?.[0]?.name || '';
         // console.log(`SlideItem imageUrl: ${imageUrl} for slide ${imageorder} at index ${index}, fileName: ${fileName}`);
         return (
             (imageUrl === '' ||
@@ -167,7 +171,7 @@ export const EditPointForm = (
             )
                 ? null
                 :
-                <li id={`index-${index}`} key={`li-${_key}`} className="border border-gray-300 rounded-md p-2 m-2 flex items-start justify-start content-start">
+                <li id={`index-${index}`} key={`li-${_key}`} className="border border-gray-300 rounded-md p-2 m-2 flex items-start justify-start content-start relative">
 
                     <Image
                         className='cursor-pointer'
@@ -178,20 +182,23 @@ export const EditPointForm = (
                                 slidesImageRef.current[imageorder] = el;
                             }
                         }}
-                        src={imageUrl}
+                        // src={imageUrl}
+                        src={slidesImageRef.current[imageorder]?.src ?? imageUrl}
                         alt={`Slide ${imageorder} for point ${pointid}`}
                         width={200}
                         height={150}
-                        onClick={() => {
-                            const ref = slidesInputRef.current[imageorder];
-                            if (ref) {
-                                ref.click();
-                            }
-                        }}
+                    // onClick={() => {
+                    // not used now, I make the file input fill the space but be transparent so it takes the click itself rather than this image passing the click on
+                    //     const ref = slidesInputRef.current[imageorder];
+                    //     if (ref) {
+                    //         ref.click();
+                    //     }
+                    // }}
                     />
-                    <div className="block ml-2" key={`div-${_key}`}>
+                    <div className="block ml-2 mb-0 pb-0" key={`div-${_key}`}>
                         <Caption text={caption ?? ''} imageorder={imageorder} />
-                        <button type="button" onClick={() => confirm('Are you sure you want to delete this slide?') ? removeSlide({ pointid: pointid, image: image }) : null} className="align-text-bottom bg-amber-300 text-red-700 p-2 rounded hover:bg-amber-600 transition duration-200 mb-1">
+                        <button type="button" onClick={() => confirm('Are you sure you want to delete this slide?') ? removeSlide({ pointid: pointid, image: image }) : null}
+                            className="cursor-pointer align-text-bottom bg-amber-300 text-red-700 p-2 rounded hover:bg-amber-600 hover:text-amber-100 transition duration-200 mb-0">
                             Remove X
                         </button>
                         <SlideFileInput
@@ -206,7 +213,6 @@ export const EditPointForm = (
     }
 
     const SlideFileInput = ({ keyName, imageorder, matchingSlide }: { keyName: string; imageorder: number; matchingSlide?: HTMLImageElement }) => {
-        // console.log(`Rendering SlideFileInput for keyName: ${keyName}, index: ${index}`);
         return (
             <input
                 key={keyName}
@@ -218,20 +224,21 @@ export const EditPointForm = (
                         slidesInputRef.current[imageorder] = el;
                     }
                 }}
-                value={''} // to allow re-selecting the same file
                 onChange={
                     (e) => {
                         console.log(`onChange File input changed for slide ${imageorder}:`, e.target.files);
                         console.log(`matchingSlide:`, matchingSlide);
                         handleFilePickSlides(e, imageorder);
-                        const newFileURL = URL.createObjectURL(e.target.files?.[0] || new Blob());
-                        if (matchingSlide) {
-                            matchingSlide.src = newFileURL;
-                        }
+                        // const newFileURL = URL.createObjectURL(e.target.files?.[0] || new Blob());
+                        // if (matchingSlide) {
+                        //     matchingSlide.src = newFileURL;
+                        // }
                     }
                 }
                 accept="image/png, image/jpeg, image/gif"
-                className="mb-1 hidden"
+                className="absolute top-1.5 left-1.5 z-0 cursor-pointer"
+                style={{ height: '150px', width: '200px', opacity: 0, color: 'transparent' }} // Hide the input but keep it accessible
+                title='click to pick a different file'
             />
         );
     };
@@ -239,13 +246,15 @@ export const EditPointForm = (
     const Caption = ({ text, imageorder }: { text: string; imageorder: number }) => {
         console.log(`Rendering Caption for text: ${text}`);
         return (
-            <textarea cols={50}
+            <textarea cols={50} rows={4}
                 name='captions[]'
+                aria-placeholder='Enter caption for this slide'
                 defaultValue={text}
                 // if I use onChange to make a managed component then focus is lost after every character typed
                 // if I leave it uncontrolled every time the component re-renders, whenever a file is edited
                 // then the comment returns to the default value
-                // so I have to use a ref to store the current value
+                // so I have to use a ref to store the current value and onBlur to update the state which is when
+                // the user finishes editing
                 ref={el => {
                     if (el) {
                         el.value = captions[imageorder] ?? '';
@@ -257,16 +266,7 @@ export const EditPointForm = (
                     setCaptions(newCaptions);
                 }}
                 placeholder="Enter caption for this slide"
-                // This doesn't work as I want because the component re-renders every time a file is changed
-                // and the caption returns to the defaultValue
-                // value={captions[imageorder] ?? text}
-                // onChange={(e) => {
-                //     const newCaptions = [...captions];
-                //     newCaptions[imageorder] = e.target.value;
-                //     setCaptions(newCaptions);
-                //     e.currentTarget.focus();
-                // }}
-                className="block mb-2" />
+                className="block mb-3.25" />
         );
     }
 
@@ -289,7 +289,6 @@ export const EditPointForm = (
                                 key={_key}
                                 pointid={slide.pointid}
                                 image={slide.image}
-                                // caption={slide.caption}
                                 caption={caption}
                                 imageorder={slide.imageorder}
                                 index={index}
