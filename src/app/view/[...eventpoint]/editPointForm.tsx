@@ -68,12 +68,6 @@ export const EditPointForm = (
                 formData.append(`slideFile[]`, file);
             });
         }
-        if (Array.isArray(slidesInputArr.current) && slidesInputArr.current.length > 0) {
-            slidesInputArr.current.forEach((file, index) => {
-                console.log(`Adding slide file ${index}:`, file);
-                formData.append(`slideFile[]`, file);
-            });
-        }
         formData.set('eventid', evntSeqPntSlides?.eventid.toString());
         formData.set('pointid', evntSeqPntSlides?.pointid.toString());
         formData.set('deletedImages[]', JSON.stringify(deletedImages));
@@ -131,6 +125,7 @@ export const EditPointForm = (
                     ]);
                     deletedImagesRef.current.push(previousFileName);
                     slidesInputArr.current[imageorder] = file;
+
                     if (slidesImageRef.current[imageorder]) {
                         slidesImageRef.current[imageorder].src = URL.createObjectURL(file);
                     }
